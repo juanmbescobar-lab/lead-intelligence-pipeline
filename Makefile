@@ -31,3 +31,20 @@ backup: ## Export n8n workflows to n8n/workflows/
 
 test-webhook: ## Send a test lead payload to the webhook
 	@echo "⚠️  Configure WEBHOOK_URL in this target first"
+
+dev-install: ## Install development dependencies
+	python3 -m venv .venv
+	.venv/bin/pip install -r requirements-dev.txt
+	@echo "✅ Dev dependencies installed"
+	@echo "👉 Activate with: source .venv/bin/activate"
+
+lint: ## Run all linters locally
+	@echo "🔍 Running yamllint..."
+	.venv/bin/yamllint .github/workflows/ .yamllint.yml
+	@echo "🔍 Running ruff..."
+	@if find . -name "*.py" -not -path "./.git/*" -not -path "./.venv/*" | grep -q .; then \
+		.venv/bin/ruff check . && .venv/bin/ruff format --check .; \
+	else \
+		echo "⏭️  No Python files found — skipping Ruff"; \
+	fi
+	@echo "✅ All linters passed"

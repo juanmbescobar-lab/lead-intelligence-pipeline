@@ -1,0 +1,55 @@
+---
+name: CD — Deploy to EC2
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  deploy:
+    name: Deploy n8n to EC2
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to EC2
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            'cd ~/lead-intelligence && git pull origin develop && docker compose up -d --force-recreate'
+
+      - name: Health check
+        run: |
+          echo "⏳ Waiting for n8n to start..."
+          sleep 20
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            http://${{ secrets.EC2_HOST }}:5678)
+          if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "401" ]]; then
+            echo "✅ n8n is healthy (HTTP $HTTP_CODE)"
+          else
+            echo "❌ n8n health check failed (HTTP $HTTP_CODE)"
+            exit 1
+          fi
+
+      - name: Notify Telegram on failure
+        if: failure()
+        run: |
+          REPO_URL="https://github.com/${{ github.repository }}/actions"
+          MESSAGE="❌ Deploy failed on lead-intelligence-pipeline%0ACheck: ${REPO_URL}"
+          curl -s -X POST \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="${MESSAGE}"

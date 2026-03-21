@@ -1,0 +1,12 @@
+---
+extends: default
+
+rules:
+  line-length:
+    max: 120          # GitHub Actions tiene líneas largas, 80 es muy restrictivo
+    level: warning    # warning en vez de error — no bloquea el CI
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off']
+    level: warning
+  comments:
+    min-spaces-from-content: 1
