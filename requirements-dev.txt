@@ -1,0 +1,4 @@
+# Development and CI tools
+# Install with: pip install -r requirements-dev.txt
+yamllint==1.38.0
+ruff==0.15.7

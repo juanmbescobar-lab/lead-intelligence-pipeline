@@ -1,0 +1,68 @@
+---
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  validate:
+    name: Validate project files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pip install yamllint --quiet
+
+      - name: Lint YAML files
+        run: |
+          yamllint .github/workflows/ \
+          && echo "✅ YAML workflows are valid" \
+          || (echo "❌ YAML lint errors found" && exit 1)
+
+      - name: Lint Python with Ruff
+        run: |
+          if find . -name "*.py" -not -path "./.git/*" | grep -q .; then
+            pip install ruff --quiet
+            ruff check . \
+            && echo "✅ Ruff check passed" \
+            || (echo "❌ Ruff check failed" && exit 1)
+            ruff format --check . \
+            && echo "✅ Ruff format passed" \
+            || (echo "❌ Ruff format failed — run: ruff format ." && exit 1)
+          else
+            echo "⏭️  No Python files found — skipping Ruff"
+          fi
+
+      - name: Validate docker-compose syntax
+        run: |
+          if docker compose -f docker-compose.yml config > /dev/null 2>&1; then
+            echo "✅ docker-compose.yml is valid"
+          else
+            echo "❌ docker-compose.yml has errors"
+            exit 1
+          fi
+
+      - name: Verify .env.example exists
+        run: |
+          test -f .env.example \
+          && echo "✅ .env.example exists" \
+          || (echo "❌ .env.example is missing" && exit 1)
+
+      - name: Verify required env keys are documented
+        run: |
+          for key in N8N_PORT N8N_BASIC_AUTH_USER N8N_BASIC_AUTH_PASSWORD ANTHROPIC_API_KEY; do
+            grep -q "^${key}" .env.example \
+            && echo "✅ ${key} documented" \
+            || (echo "❌ ${key} missing from .env.example" && exit 1)
+          done
+
+      - name: Verify ADR directory exists and has content
+        run: |
+          test -d adr \
+          && test "$(ls adr/*.md 2>/dev/null | wc -l)" -gt 0 \
+          && echo "✅ ADR directory has $(ls adr/*.md | wc -l) decision records" \
+          || (echo "❌ ADR directory missing or empty" && exit 1)
