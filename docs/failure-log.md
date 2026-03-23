@@ -239,3 +239,45 @@ Tracked in ADR-004 as a future improvement.
 When deploying web applications without HTTPS, always check if the
 application enforces security features that require HTTPS. Plan for
 HTTPS from the beginning of a project — not as an afterthought.
+
+## FAILURE-005: Claude Scoring Bias from Prompt Context
+
+**Date:** 2026-03-23
+**Severity:** Medium — incorrect lead scoring affecting routing decisions
+**Detected by:** Manual review of execution output
+
+### What broke
+Claude scored a high-intent lead (specific problem, professional email,
+urgent need) as 4/low — same score as a test submission.
+
+### Error output
+```
+reasoning: "generic test name and email format suggest this is
+a test submission rather than a genuine prospect"
+```
+
+### Why it happened
+The original prompt included hardcoded example output inside the prompt
+itself. Claude used that context to evaluate subsequent leads, mixing
+previous examples with actual lead data. The prompt also lacked explicit
+evaluation criteria, leaving Claude to infer what to score.
+
+### What we changed
+Rewrote the prompt with:
+1. Explicit scoring criteria (specificity, legitimacy, urgency, fit)
+2. "based ONLY on the data given" instruction to eliminate context bias
+3. "based only on this lead" constraint on the reasoning field
+4. Removed hardcoded examples from the prompt
+
+### Verification
+Same lead re-submitted after prompt update:
+- Before: score 4, tier low
+- After: score 8, tier high ✅
+
+### What we learned
+LLM prompts in production require explicit constraints to prevent
+context bleeding. Always specify:
+- What data to use (only the provided data)
+- What criteria to apply (explicit evaluation rubric)
+- What format to return (specific JSON structure)
+Iterate prompts based on real output, not just expected behavior.
