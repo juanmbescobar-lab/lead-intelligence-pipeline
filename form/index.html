@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lead Intelligence — Contact</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f0f1a;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 520px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .header .badge {
+      display: inline-block;
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      padding: 0.35rem 1rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 1.2rem;
+    }
+
+    .header h1 {
+      color: #f1f5f9;
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.75rem;
+    }
+
+    .header h1 span {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header p {
+      color: #94a3b8;
+      font-size: 1rem;
+      line-height: 1.6;
+    }
+
+    .card {
+      background: #1e1e2e;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 2.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    label {
+      display: block;
+      color: #cbd5e1;
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+
+    label .required {
+      color: #f87171;
+      margin-left: 2px;
+    }
+
+    input, textarea {
+      width: 100%;
+      background: #0f0f1a;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: #f1f5f9;
+      font-size: 0.95rem;
+      padding: 0.75rem 1rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+      font-family: inherit;
+    }
+
+    input:focus, textarea:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+
+    input::placeholder, textarea::placeholder {
+      color: #475569;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    .input-error {
+      border-color: #f87171 !important;
+    }
+
+    .error-msg {
+      color: #f87171;
+      font-size: 0.8rem;
+      margin-top: 0.35rem;
+      display: none;
+    }
+
+    .btn {
+      width: 100%;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0.875rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      margin-top: 0.5rem;
+      font-family: inherit;
+    }
+
+    .btn:hover { opacity: 0.9; }
+    .btn:active { transform: scale(0.99); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .status {
+      display: none;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-top: 1.25rem;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .status.success {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #6ee7b7;
+    }
+
+    .status.error {
+      background: rgba(248, 113, 113, 0.1);
+      border: 1px solid rgba(248, 113, 113, 0.3);
+      color: #fca5a5;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 1.5rem;
+      color: #475569;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="badge">⚡ AI-Powered Lead Intelligence</div>
+      <h1>Let's <span>automate</span> your business</h1>
+      <p>Tell us about your automation needs and our AI will analyze your request instantly.</p>
+    </div>
+
+    <div class="card">
+      <form id="leadForm" novalidate>
+
+        <div class="form-group">
+          <label>Full Name <span class="required">*</span></label>
+          <input type="text" id="name" placeholder="Juan Bermudez" autocomplete="name">
+          <div class="error-msg" id="name-error">Please enter your full name.</div>
+        </div>
+
+        <div class="form-group">
+          <label>Work Email <span class="required">*</span></label>
+          <input type="email" id="email" placeholder="juan@company.com" autocomplete="email">
+          <div class="error-msg" id="email-error">Please enter a valid email address.</div>
+        </div>
+
+        <div class="form-group">
+          <label>Company <span class="required">*</span></label>
+          <input type="text" id="company" placeholder="Acme Corp" autocomplete="organization">
+          <div class="error-msg" id="company-error">Please enter your company name.</div>
+        </div>
+
+        <div class="form-group">
+          <label>What do you need to automate? <span class="required">*</span></label>
+          <textarea id="message" placeholder="Describe your current challenges and what you'd like to automate. The more detail, the better our AI can help."></textarea>
+          <div class="error-msg" id="message-error">Please describe your automation needs.</div>
+        </div>
+
+        <button type="submit" class="btn" id="submitBtn">
+          Send Request →
+        </button>
+
+        <div class="status" id="status"></div>
+      </form>
+    </div>
+
+    <div class="footer">
+      Your information is analyzed by AI and handled securely.
+    </div>
+  </div>
+
+  <script>
+    const WEBHOOK_URL = 'http://15.134.33.226:5678/webhook/lead-capture';
+
+    const form = document.getElementById('leadForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const status = document.getElementById('status');
+
+    // Validate a single field
+    function validateField(id, validator) {
+      const input = document.getElementById(id);
+      const error = document.getElementById(`${id}-error`);
+      const valid = validator(input.value.trim());
+      input.classList.toggle('input-error', !valid);
+      error.style.display = valid ? 'none' : 'block';
+      return valid;
+    }
+
+    // Email regex
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    // Validate all fields
+    function validateAll() {
+      const v1 = validateField('name', v => v.length >= 2);
+      const v2 = validateField('email', v => emailRegex.test(v));
+      const v3 = validateField('company', v => v.length >= 2);
+      const v4 = validateField('message', v => v.length >= 10);
+      return v1 && v2 && v3 && v4;
+    }
+
+    // Show status message
+    function showStatus(type, message) {
+      status.className = `status ${type}`;
+      status.textContent = message;
+      status.style.display = 'block';
+    }
+
+    // Real-time validation on blur
+    document.getElementById('name').addEventListener('blur', () =>
+      validateField('name', v => v.length >= 2));
+    document.getElementById('email').addEventListener('blur', () =>
+      validateField('email', v => emailRegex.test(v)));
+    document.getElementById('company').addEventListener('blur', () =>
+      validateField('company', v => v.length >= 2));
+    document.getElementById('message').addEventListener('blur', () =>
+      validateField('message', v => v.length >= 10));
+
+    // Form submission
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (!validateAll()) {
+        showStatus('error', 'Please fix the errors above before submitting.');
+        return;
+      }
+
+      // Disable button and show loading
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+      status.style.display = 'none';
+
+      const payload = {
+        name: document.getElementById('name').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        company: document.getElementById('company').value.trim(),
+        message: document.getElementById('message').value.trim(),
+        source: 'web-form'
+      };
+
+      try {
+        const response = await fetch(WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+          showStatus('success',
+            '✅ Request received! Our AI is analyzing your needs. We\'ll be in touch shortly.');
+          form.reset();
+        } else {
+          throw new Error(`Server responded with ${response.status}`);
+        }
+      } catch (err) {
+        showStatus('error',
+          '❌ Something went wrong. Please try again or contact us directly.');
+        console.error('Submission error:', err);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Request →';
+      }
+    });
+  </script>
+</body>
+</html>
