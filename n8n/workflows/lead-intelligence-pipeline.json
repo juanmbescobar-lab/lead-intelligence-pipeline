@@ -1,0 +1,723 @@
+{
+  "name": "Lead intelligence pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-capture",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5c9ec231-81b4-4de1-b2af-838ca3a9629a",
+      "name": "Webhook",
+      "webhookId": "42fb281b-880d-4653-9535-10e2ec4a83d4",
+      "retryOnFail": true,
+      "notes": "Receives lead data from the HTML form via HTTP POST.\nExpected fields: name, email, company, message, source.\nProduction URL: http://15.134.33.226:5678/webhook/lead-capture"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get data from webhook\nconst items = $input.all();\nconst body = items[0].json.body;\n\n// Required fields\nconst required = ['name', 'email', 'company', 'message'];\nconst missing = required.filter(field => !body[field] || body[field].trim() === '');\n\n// Validate email format\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nconst validEmail = emailRegex.test(body.email || '');\n\n// Build validation result\nif (missing.length > 0) {\n  throw new Error(`Missing required fields: ${missing.join(', ')}`);\n}\n\nif (!validEmail) {\n  throw new Error(`Invalid email format: ${body.email}`);\n}\n\n// Return clean, normalized data\nreturn [{\n  json: {\n    name: body.name.trim(),\n    email: body.email.trim().toLowerCase(),\n    company: body.company.trim(),\n    message: body.message.trim(),\n    source: body.source || 'web-form',\n    received_at: new Date().toISOString(),\n    validation_status: 'passed'\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "593e6549-57b2-4040-846f-642b77027b97",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "ANTHROPIC_API_KEY_REDACTED"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 1024,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"You are a B2B lead qualification specialist. Your job is to analyze the lead information provided and score it objectively based ONLY on the data given.\\n\\nEvaluate these factors:\\n- Specificity of the message (vague vs. detailed)\\n- Business legitimacy (real company, professional email)\\n- Urgency and buying signals\\n- Problem clarity and fit for automation services\\n\\nLead to analyze:\\n- Name: \" + $json.name + \"\\n- Email: \" + $json.email + \"\\n- Company: \" + $json.company + \"\\n- Message: \" + $json.message + \"\\n\\nRespond ONLY with a valid JSON object, no markdown, no explanation:\\n{\\\"score\\\": <integer 1-10>, \\\"tier\\\": \\\"<high|medium|low>\\\", \\\"reasoning\\\": \\\"<one sentence based only on this lead>\\\", \\\"pain_points\\\": [\\\"<specific pain point from message>\\\"], \\\"recommended_action\\\": \\\"<specific next step>\\\"}\"\n  }]\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        416,
+        0
+      ],
+      "id": "61582370-a282-4968-87ca-c27229c1c74e",
+      "name": "HTTP Request",
+      "notes": "Calls Claude Haiku API to score and enrich the lead.\nReturns structured JSON with score (1-10), tier, reasoning,\npain points, and recommended action.\nUses ANTHROPIC_API_KEY from n8n environment variables."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get Claude's response\nconst items = $input.all();\nconst claudeResponse = items[0].json;\n\n// Extract the text content from Claude's response\nconst rawText = claudeResponse.content[0].text;\n\n// Remove markdown code blocks if present (```json ... ```)\nconst cleanJson = rawText\n  .replace(/```json\\n?/g, '')\n  .replace(/```\\n?/g, '')\n  .trim();\n\n// Parse the JSON string into an object\nconst parsed = JSON.parse(cleanJson);\n\n// Return enriched lead data with Claude's analysis\nreturn [{\n  json: {\n    // Original lead data passed through\n    name: $('Code in JavaScript').item.json.name,\n    email: $('Code in JavaScript').item.json.email,\n    company: $('Code in JavaScript').item.json.company,\n    message: $('Code in JavaScript').item.json.message,\n    source: $('Code in JavaScript').item.json.source,\n    received_at: $('Code in JavaScript').item.json.received_at,\n    \n    // Claude's analysis\n    score: parsed.score,\n    tier: parsed.tier,\n    reasoning: parsed.reasoning,\n    pain_points: parsed.pain_points,\n    recommended_action: parsed.recommended_action,\n    \n    // Metadata\n    model_used: claudeResponse.model,\n    tokens_used: claudeResponse.usage.output_tokens,\n    processed_at: new Date().toISOString()\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "50b83cce-ec89-4228-85f8-e8f53fe586d4",
+      "name": "Code in JavaScript1",
+      "notes": "\nParses Claude's JSON response from markdown code blocks.\nCombines original lead data with Claude's enrichment.\nOutput: unified lead object ready for routing."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "92efa39e-b67a-4e79-a19d-c689d5fa263f",
+              "leftValue": "={{ $json.tier }}",
+              "rightValue": "high",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        832,
+        0
+      ],
+      "id": "039ea9c2-d767-45d5-b52d-a31e9c019d28",
+      "name": "If",
+      "notes": "Routes high-tier leads (score >= 7) to immediate Telegram alert.\nFalse path continues to medium/low routing."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "51c138b1-b3fb-411c-add8-552ce306a9a1",
+              "leftValue": "={{ $json.tier }}",
+              "rightValue": "medium",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1040,
+        96
+      ],
+      "id": "6dc11a3e-070c-4ffd-a689-6f46f1bf1387",
+      "name": "If1",
+      "notes": "Routes medium-tier leads to review queue.\nFalse path = low tier leads, logging only."
+    },
+    {
+      "parameters": {
+        "chatId": "-5103912959",
+        "text": "=🔥 HIGH VALUE LEAD\n\n👤 Name: {{ $json.name }}\n📧 Email: {{ $json.email }}\n🏢 Company: {{ $json.company }}\n\n📊 Score: {{ $json.score }}/10\n🎯 Tier: {{ $json.tier.toUpperCase() }}\n\n💬 Message: {{ $json.message }}\n\n🧠 AI Analysis: {{ $json.reasoning }}\n\n⚡ Recommended Action: {{ $json.recommended_action }}\n\n🕐 Received: {{ $json.received_at }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        -96
+      ],
+      "id": "9710cbe4-9ccd-451b-b601-2d8e6284803d",
+      "name": "Send a text message",
+      "webhookId": "1bbdd931-9bd8-437b-9193-3d5641813312",
+      "credentials": {
+        "telegramApi": {
+          "id": "QyMXUw2qgYxR2e72",
+          "name": "Telegram account"
+        }
+      },
+      "notes": "Sends immediate Telegram alert for high-tier leads (score >= 7).\nIncludes full lead data and Claude's analysis."
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1bPgEd67XA4pXtuuqAewo9IZ98HLX3D7lHZAaJM73DgE",
+          "mode": "list",
+          "cachedResultName": "Lead Intelligence Pipeline",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bPgEd67XA4pXtuuqAewo9IZ98HLX3D7lHZAaJM73DgE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Hoja 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bPgEd67XA4pXtuuqAewo9IZ98HLX3D7lHZAaJM73DgE/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "received_at": "={{ $('Code in JavaScript1').item.json.received_at }}",
+            "name": "={{ $('Code in JavaScript1').item.json.name }}",
+            "email": "={{ $('Code in JavaScript1').item.json.email }}",
+            "company": "={{ $('Code in JavaScript1').item.json.company }}",
+            "source": "={{ $('Code in JavaScript1').item.json.source }}",
+            "recommended_action": "={{ $('Code in JavaScript1').item.json.recommended_action }}",
+            "reasoning": "={{ $('Code in JavaScript1').item.json.reasoning }}",
+            "tier": "={{ $('Code in JavaScript1').item.json.tier }}",
+            "score": "={{ $('Code in JavaScript1').item.json.score }}",
+            "message": "={{ $('Code in JavaScript1').item.json.message }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "received_at",
+              "displayName": "received_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tier",
+              "displayName": "tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reasoning",
+              "displayName": "reasoning",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recommended_action",
+              "displayName": "recommended_action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1264,
+        -112
+      ],
+      "id": "dfeaeb3c-d2f5-4c57-a235-90b48f9bf73a",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleApi": {
+          "id": "NBrXyu0zY0za2bWH",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Appends medium-tier leads to Google Sheets review queue.\nHuman review required before outreach."
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1bPgEd67XA4pXtuuqAewo9IZ98HLX3D7lHZAaJM73DgE",
+          "mode": "list",
+          "cachedResultName": "Lead Intelligence Pipeline",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bPgEd67XA4pXtuuqAewo9IZ98HLX3D7lHZAaJM73DgE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Hoja 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bPgEd67XA4pXtuuqAewo9IZ98HLX3D7lHZAaJM73DgE/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "received_at": "={{ $json.received_at }}",
+            "name": "={{ $json.name }}",
+            "email": "={{ $json.email }}",
+            "company": "={{ $json.company }}",
+            "source": "={{ $json.source }}",
+            "recommended_action": "={{ $json.recommended_action }}",
+            "reasoning": "={{ $json.reasoning }}",
+            "tier": "={{ $json.tier }}",
+            "score": "={{ $json.score }}",
+            "message": "={{ $json.message }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "received_at",
+              "displayName": "received_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tier",
+              "displayName": "tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reasoning",
+              "displayName": "reasoning",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recommended_action",
+              "displayName": "recommended_action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1264,
+        80
+      ],
+      "id": "5c4dfcf6-1b2d-4093-b97b-60c28a93bb17",
+      "name": "Append row in sheet1",
+      "credentials": {
+        "googleApi": {
+          "id": "NBrXyu0zY0za2bWH",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Appends medium-tier leads to Google Sheets review queue.\nHuman review required before outreach."
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1bPgEd67XA4pXtuuqAewo9IZ98HLX3D7lHZAaJM73DgE",
+          "mode": "list",
+          "cachedResultName": "Lead Intelligence Pipeline",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bPgEd67XA4pXtuuqAewo9IZ98HLX3D7lHZAaJM73DgE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Hoja 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bPgEd67XA4pXtuuqAewo9IZ98HLX3D7lHZAaJM73DgE/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "received_at": "={{ $json.received_at }}",
+            "name": "={{ $json.name }}",
+            "email": "={{ $json.email }}",
+            "company": "={{ $json.company }}",
+            "source": "={{ $json.source }}",
+            "recommended_action": "={{ $json.recommended_action }}",
+            "reasoning": "={{ $json.reasoning }}",
+            "tier": "={{ $json.tier }}",
+            "score": "={{ $json.score }}",
+            "message": "={{ $json.message }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "received_at",
+              "displayName": "received_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tier",
+              "displayName": "tier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reasoning",
+              "displayName": "reasoning",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recommended_action",
+              "displayName": "recommended_action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1248,
+        240
+      ],
+      "id": "48c60ff7-2e69-4222-956b-6d2db081e283",
+      "name": "Append row in sheet2",
+      "credentials": {
+        "googleApi": {
+          "id": "NBrXyu0zY0za2bWH",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Appends medium-tier leads to Google Sheets review queue.\nHuman review required before outreach."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "011a9a2d-028d-44cf-a191-3016ee2f5642",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0f4e951640cbf2c4c5baa5f844614affe35c5acac114a1a7a086b12840844c12"
+  },
+  "id": "P4YckMHV7moR1aRk",
+  "tags": []
+}
